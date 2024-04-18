@@ -1,0 +1,125 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+  annotations:
+    app.gitlab.com/app: ${CI_PROJECT_PATH_SLUG}
+    app.gitlab.com/env: ${CI_ENVIRONMENT_SLUG}
+spec:
+  replicas: ${CI_REPLICAS}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        commit: "${CI_COMMIT_SHORT_SHA}"
+        app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry-${CI_PROJECT_PATH_SLUG}
+      containers:
+        - name: app
+          image: ${CI_APPLICATION_REPOSITORY}
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "100m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          ports:
+            - containerPort: 80
+              protocol: TCP
+              name: http
+            - containerPort: 443
+              protocol: TCP
+              name: https
+          volumeMounts:
+            - mountPath: /credentials
+              name: pv-credentials-${CI_PROJECT_PATH_SLUG}
+      volumes:
+        - name: pv-credentials-${CI_PROJECT_PATH_SLUG}
+          persistentVolumeClaim:
+            claimName: pvc-credentials-${CI_PROJECT_PATH_SLUG}
+
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-credentials-${CI_PROJECT_PATH_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi
+---
+# apiVersion: autoscaling/v2beta2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: ${CI_ENVIRONMENT_SLUG}
+#   namespace: ${KUBE_NAMESPACE}
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: ${CI_ENVIRONMENT_SLUG}
+#   minReplicas: 1
+#   maxReplicas: 1
+#   metrics:
+#     - resource:
+#         name: memory
+#         target:
+#           averageUtilization: 70
+#           type: Utilization
+#       type: Resource
+#     - resource:
+#         name: cpu
+#         target:
+#           averageUtilization: 70
+#           type: Utilization
+#       type: Resource
+# ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 80
+    - name: https
+      port: 443
+      protocol: TCP
+      targetPort: 443
+  selector:
+    app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+
