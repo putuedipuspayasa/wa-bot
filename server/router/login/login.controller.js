@@ -8,10 +8,10 @@ class ControllerLogin {
 	async loginStore(req, res) {
 		let username = req.body.username;
         let password = req.body.password;
-		if(username == 'krisna' && password == 'krisna337') {
+		if(username == 'admin' && password == 'admin') {
 			req.session.loggedin = true;
 			req.session.userid = 337;
-			req.session.username = 'Krisna Ganteng';
+			req.session.username = 'admin';
 			return res.redirect('/dashboard');
 		} else {
 			req.flash("error_msg", `Username or Password Wrong`);
